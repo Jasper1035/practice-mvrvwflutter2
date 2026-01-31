@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "971903527266",
+    "project_id": "mvrvwfutter2",
+    "storage_bucket": "mvrvwfutter2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:971903527266:android:6ad27c7aae185800a4e43b",
+        "android_client_info": {
+          "package_name": "com.example.mvrvwflutter2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1fRWbkkSy-bS2xjzMYYhzk45aQLUKi2g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
