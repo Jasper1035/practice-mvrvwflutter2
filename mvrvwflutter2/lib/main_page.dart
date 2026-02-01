@@ -1,5 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+// import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mvrvwflutter2/firebasefiles/crudop.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -10,15 +14,17 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   // local data for show in the table .. stored in local storage
-  final List<Map<String, dynamic>> _movieList = [
-    {'name': 'john wick', 'type': 'Action', 'ratings': '8'},
-    {'name': 'venom', 'type': 'sci', 'ratings': '5'},
-  ];
+  // final List<Map<String, dynamic>> _movieList = [
+  //   {'name': 'john wick', 'type': 'Action', 'ratings': '8'},
+  //   {'name': 'venom', 'type': 'sci', 'ratings': '5'},
+  // ];
 
   // public / local controllers for chnage states.
   final TextEditingController _mnameController = TextEditingController();
   final TextEditingController _mtypeController = TextEditingController();
   final TextEditingController _ratings = TextEditingController();
+  final Crudop _db = Crudop();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -29,56 +35,59 @@ class _MainPageState extends State<MainPage> {
         ),
         actions: [IconButton(onPressed: () {}, icon: Icon(Icons.logout))],
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        child: SingleChildScrollView(
-          child: DataTable(
-            showCheckboxColumn: false,
-            dataTextStyle: TextStyle(color: Colors.white),
-            dataRowColor: WidgetStatePropertyAll(Color(0xff878787)),
-            headingRowColor: WidgetStateProperty.all(Color(0xff05ad98)),
-            border: TableBorder.all(width: 2),
-            columns: [
-              DataColumn(label: Text('Name')),
-              DataColumn(label: Text('Type')),
-              DataColumn(label: Text('Ratings')),
-              DataColumn(label: Text('Action')),
-            ],
-            rows: _movieList.map((movie) {
-              return DataRow(
-                onSelectChanged: (bool? selected) {
-                  if (selected != null) {
-                    _editFields(movie);
-                  }
-                },
-                cells: [
-                  DataCell(Text(movie['name'] ?? '')),
-                  DataCell(Text(movie['type'] ?? '')),
-                  DataCell(Text('${movie['ratings'] ?? ''}/10')),
-                  DataCell(
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _movieList.remove(movie); //delete button.
-                        });
-                      },
-                      icon: Icon(Icons.delete, color: Colors.amber),
-                    ),
-                  ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _db.movieStream,
+        builder: (context, snapshot) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: SingleChildScrollView(
+              child: DataTable(
+                showCheckboxColumn: false,
+                dataTextStyle: TextStyle(color: Colors.white),
+                dataRowColor: WidgetStatePropertyAll(Color(0xff878787)),
+                headingRowColor: WidgetStateProperty.all(Color(0xff05ad98)),
+                border: TableBorder.all(width: 2),
+                columns: [
+                  DataColumn(label: Text('Name')),
+                  DataColumn(label: Text('Type')),
+                  DataColumn(label: Text('Ratings')),
+                  DataColumn(label: Text('Action')),
                 ],
-              );
-            }).toList(),
-          ),
-        ),
+                rows: snapshot.data!.docs.map((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  return DataRow(
+                    onSelectChanged: (selected) {
+                      if (selected != null) {
+                        _editFields(doc.id, data);
+                      }
+                    },
+                    cells: [
+                      DataCell(Text(data['name'] ?? '')),
+                      DataCell(Text(data['type'] ?? '')),
+                      DataCell(Text('${data['ratings'] ?? ''}/10')),
+
+                      DataCell(
+                        IconButton(
+                          onPressed: () {
+                            _db.delete(doc.id);
+                          },
+                          icon: Icon(Icons.delete, color: Colors.amber),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton.large(
         //add button at the bottom right
         backgroundColor: Color(0xff05ad98),
         foregroundColor: Colors.white,
         onPressed: () {
-          setState(() {
-            _addMovie(context);
-          });
+          _addMovie(context);
         },
 
         child: Icon(Icons.add),
@@ -128,18 +137,15 @@ class _MainPageState extends State<MainPage> {
                     _mtypeController.text.isNotEmpty &&
                     _ratings.text.isNotEmpty) {
                   if (enteredRating! >= 0 && enteredRating <= 10) {
-                    setState(() {
-                      _movieList.add({
-                        'name': _mnameController.text,
-                        'type': _mtypeController.text,
-                        'ratings': _ratings.text,
-                      });
-
-                      Navigator.pop(context);
-                      _mnameController.clear();
-                      _mtypeController.clear();
-                      _ratings.clear();
-                    });
+                    _db.addMovieFirebase(
+                      _mnameController.text,
+                      _mtypeController.text,
+                      _ratings.text,
+                    );
+                    Navigator.pop(context);
+                    _mnameController.clear();
+                    _mtypeController.clear();
+                    _ratings.clear();
                   }
                 }
               },
@@ -152,7 +158,7 @@ class _MainPageState extends State<MainPage> {
   }
 
   //Edit fields functions.
-  void _editFields(Map<String, dynamic> movie) {
+  void _editFields(String docId, Map<String, dynamic> movie) {
     _mnameController.text = movie['name'] ?? '';
     _mtypeController.text = movie['type'] ?? '';
     _ratings.text = movie['ratings'] ?? '';
@@ -188,17 +194,18 @@ class _MainPageState extends State<MainPage> {
             ),
             ElevatedButton(
               onPressed: () {
-                double? rating = double.tryParse(_ratings.text);
+                double? ratings = double.tryParse(_ratings.text);
 
                 if (_mnameController.text.isNotEmpty &&
                     _mtypeController.text.isNotEmpty &&
                     _ratings.text.isNotEmpty) {
-                  if (rating! >= 0 && rating <= 10) {
-                    setState(() {
-                      movie['name'] = _mnameController.text;
-                      movie['type'] = _mtypeController.text;
-                      movie['ratings'] = _ratings.text;
-                    });
+                  if (ratings! >= 0 && ratings <= 10) {
+                    _db.updateMovie(
+                      docId,
+                      _mnameController.text,
+                      _mtypeController.text,
+                      _ratings.text,
+                    );
                   }
                 }
                 Navigator.pop(context);
